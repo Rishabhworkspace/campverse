@@ -129,26 +129,30 @@ export default function ChatPage() {
 
                     <ScrollArea flex={1} viewportRef={viewport} mb="md" type="always" offsetScrollbars>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            {messages.map((msg) => (
-                                <Paper
-                                    key={msg._id}
-                                    p="sm"
-                                    radius="md"
-                                    bg={msg.senderId === profile?._id ? 'blue.1' : 'gray.1'}
-                                    style={{
-                                        alignSelf: msg.senderId === profile?._id ? 'flex-end' : 'flex-start',
-                                        maxWidth: '70%',
-                                    }}
-                                >
-                                    <Group gap="xs" mb={4}>
-                                        <Text size="xs" fw={700} c="dimmed">{msg.senderName}</Text>
-                                        <Text size="xs" c="dimmed">
-                                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </Text>
-                                    </Group>
-                                    <Text size="sm" style={{ wordBreak: 'break-word' }}>{msg.content}</Text>
-                                </Paper>
-                            ))}
+                            {messages.map((msg) => {
+                                const myId = String(profile?._id ?? '');
+                                const isMe = msg.senderId === myId;
+                                return (
+                                    <Paper
+                                        key={msg._id}
+                                        p="sm"
+                                        radius="md"
+                                        bg={isMe ? 'blue.1' : 'gray.1'}
+                                        style={{
+                                            alignSelf: isMe ? 'flex-end' : 'flex-start',
+                                            maxWidth: '70%',
+                                        }}
+                                    >
+                                        <Group gap="xs" mb={4}>
+                                            <Text size="xs" fw={700} c="dimmed">{msg.senderName}</Text>
+                                            <Text size="xs" c="dimmed">
+                                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </Text>
+                                        </Group>
+                                        <Text size="sm" style={{ wordBreak: 'break-word' }}>{msg.content}</Text>
+                                    </Paper>
+                                );
+                            })}
                             {messages.length === 0 && (
                                 <Center h={200}>
                                     <Text c="dimmed">No messages yet. Start the conversation!</Text>
