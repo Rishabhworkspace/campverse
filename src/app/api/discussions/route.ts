@@ -114,7 +114,6 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'User not found' }, { status: 404 });
             }
 
-            // Allow if role is alumni OR admin (Strict "Only Passout" rule)
             const isAuthorized = user.role === 'alumni' || user.role === 'admin';
             
             if (!isAuthorized) {

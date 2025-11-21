@@ -37,40 +37,46 @@ export function Navbar() {
                         </Group>
 
                         <Group h="100%" gap={0} visibleFrom="md">
-                            <Link href="/skills" className={classes.link}>
-                                Skills
-                            </Link>
-                            <Link href="/resources" className={classes.link}>
-                                Resources
-                            </Link>
-                            <Link href="/events" className={classes.link}>
-                                Events
-                            </Link>
-                            <Link href="/projects" className={classes.link}>
-                                Projects
-                            </Link>
-                            <Link href="/discussions" className={classes.link}>
-                                Discussions
-                            </Link>
-                            <Link href="/quizzes" className={classes.link}>
-                                Quizzes
-                            </Link>
-                            <Link href="/chat" className={classes.link}>
-                                Chat
-                            </Link>
+                            {user && (
+                                <>
+                                    <Link href="/skills" className={classes.link}>
+                                        Skills
+                                    </Link>
+                                    <Link href="/resources" className={classes.link}>
+                                        Resources
+                                    </Link>
+                                    <Link href="/events" className={classes.link}>
+                                        Events
+                                    </Link>
+                                    <Link href="/projects" className={classes.link}>
+                                        Projects
+                                    </Link>
+                                    <Link href="/discussions" className={classes.link}>
+                                        Discussions
+                                    </Link>
+                                    <Link href="/quizzes" className={classes.link}>
+                                        Quizzes
+                                    </Link>
+                                    <Link href="/chat" className={classes.link}>
+                                        Chat
+                                    </Link>
+                                </>
+                            )}
                         </Group>
 
                         <Group visibleFrom="md" gap="md">
-                            <ActionIcon
-                                component={Link}
-                                href="/users"
-                                variant="default"
-                                size="lg"
-                                aria-label="Search people"
-                                title="Search people"
-                            >
-                                <IconSearch size={16} />
-                            </ActionIcon>
+                            {user && (
+                                <ActionIcon
+                                    component={Link}
+                                    href="/users"
+                                    variant="default"
+                                    size="lg"
+                                    aria-label="Search people"
+                                    title="Search people"
+                                >
+                                    <IconSearch size={16} />
+                                </ActionIcon>
+                            )}
                             <ActionIcon
                                 onClick={() => setColorScheme(computedColorScheme === 'light' ? 'dark' : 'light')}
                                 variant="default"
@@ -142,34 +148,36 @@ export function Navbar() {
                     <Link href="/" className={classes.linkMobile} onClick={closeDrawer}>
                         Home
                     </Link>
-                    <Link href="/skills" className={classes.linkMobile} onClick={closeDrawer}>
-                        Skills
-                    </Link>
-                    <Link href="/resources" className={classes.linkMobile} onClick={closeDrawer}>
-                        Resources
-                    </Link>
-                    <Link href="/events" className={classes.linkMobile} onClick={closeDrawer}>
-                        Events
-                    </Link>
-                    <Link href="/projects" className={classes.linkMobile} onClick={closeDrawer}>
-                        Projects
-                    </Link>
-                    <Link href="/discussions" className={classes.linkMobile} onClick={closeDrawer}>
-                        Discussions
-                    </Link>
-                    <Link href="/quizzes" className={classes.linkMobile} onClick={closeDrawer}>
-                        Quizzes
-                    </Link>
-                    <Link href="/chat" className={classes.linkMobile} onClick={closeDrawer}>
-                        Chat
-                    </Link>
-                    <Link href="/users" className={classes.linkMobile} onClick={closeDrawer}>
-                        Search People
-                    </Link>
                     {user && (
-                        <Link href="/profile" className={classes.linkMobile} onClick={closeDrawer}>
-                            Profile
-                        </Link>
+                        <>
+                            <Link href="/skills" className={classes.linkMobile} onClick={closeDrawer}>
+                                Skills
+                            </Link>
+                            <Link href="/resources" className={classes.linkMobile} onClick={closeDrawer}>
+                                Resources
+                            </Link>
+                            <Link href="/events" className={classes.linkMobile} onClick={closeDrawer}>
+                                Events
+                            </Link>
+                            <Link href="/projects" className={classes.linkMobile} onClick={closeDrawer}>
+                                Projects
+                            </Link>
+                            <Link href="/discussions" className={classes.linkMobile} onClick={closeDrawer}>
+                                Discussions
+                            </Link>
+                            <Link href="/quizzes" className={classes.linkMobile} onClick={closeDrawer}>
+                                Quizzes
+                            </Link>
+                            <Link href="/chat" className={classes.linkMobile} onClick={closeDrawer}>
+                                Chat
+                            </Link>
+                            <Link href="/users" className={classes.linkMobile} onClick={closeDrawer}>
+                                Search People
+                            </Link>
+                            <Link href="/profile" className={classes.linkMobile} onClick={closeDrawer}>
+                                Profile
+                            </Link>
+                        </>
                     )}
 
                     <Divider my="sm" />

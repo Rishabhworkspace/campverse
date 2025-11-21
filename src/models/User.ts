@@ -16,6 +16,7 @@ export interface IUser extends Document {
         portfolio?: string;
     };
     profileLocked: boolean;
+    acceptedGuidelines: boolean;
     createdAt: Date;
 }
 
@@ -39,6 +40,10 @@ const UserSchema: Schema<IUser> = new Schema({
         portfolio: String,
     },
     profileLocked: {
+        type: Boolean,
+        default: false,
+    },
+    acceptedGuidelines: {
         type: Boolean,
         default: false,
     },
