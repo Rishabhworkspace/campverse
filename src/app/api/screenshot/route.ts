@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import puppeteer from 'puppeteer';
 
-// Using plain puppeteer; chrome-aws-lambda removed (deprecated / peer conflicts).
-// For serverless cold starts failing to launch Chromium, consider @sparticuz/chromium with puppeteer-core.
+// We conditionally require either full puppeteer (local dev) or puppeteer-core + @sparticuz/chromium (Vercel serverless).
+// Avoid top-level imports of heavy modules for edge; we force Node.js runtime anyway.
 // Force Node.js runtime (not edge) so native modules / larger binaries can run.
 export const runtime = 'nodejs';
 
@@ -45,19 +44,34 @@ function validateAndNormalize(params: URLSearchParams): {
 }
 
 async function getBrowser() {
-  return puppeteer.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--no-first-run',
-      '--no-zygote',
-      '--disable-extensions'
-    ],
-    defaultViewport: { width: 1280, height: 800 }
-  });
+  const isServerless = !!process.env.VERCEL || !!process.env.AWS_REGION;
+  if (isServerless) {
+    // Lazy import to keep local dev simpler and reduce cold start impact.
+    const chromium = await import('@sparticuz/chromium');
+    const puppeteerCore = await import('puppeteer-core');
+    const executablePath = await chromium.default.executablePath();
+    return puppeteerCore.default.launch({
+      executablePath,
+      args: chromium.default.args,
+      defaultViewport: { width: 1280, height: 800 },
+      headless: chromium.default.headless,
+    });
+  } else {
+    const puppeteer = (await import('puppeteer')).default;
+    return puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-extensions'
+      ],
+      defaultViewport: { width: 1280, height: 800 }
+    });
+  }
 }
 
 export async function GET(req: NextRequest) {
