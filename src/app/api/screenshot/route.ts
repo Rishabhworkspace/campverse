@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import puppeteer from 'puppeteer';
 
-// We attempt to use chrome-aws-lambda in production (serverless), and fall back to puppeteer locally.
-// Avoid importing puppeteer at module top in edge runtime; force Node.js runtime.
+// Using plain puppeteer; chrome-aws-lambda removed (deprecated / peer conflicts).
+// For serverless cold starts failing to launch Chromium, consider @sparticuz/chromium with puppeteer-core.
+// Force Node.js runtime (not edge) so native modules / larger binaries can run.
 export const runtime = 'nodejs';
 
 // Query interface (documentation only) removed to avoid unused lint error.
