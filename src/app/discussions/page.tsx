@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import { showError } from '@/lib/error-handling';
+import { getAuthHeaders } from '@/lib/api';
 
 interface Thread {
     _id: string;
@@ -125,7 +126,7 @@ export default function DiscussionsPage() {
             params.append('debug', '1');
             if (sort === 'upvotes') params.append('sort', 'upvotes');
             if (categoryFilter) params.append('category', categoryFilter);
-            const res = await fetch(`/api/discussions?${params.toString()}`);
+            const res = await fetch(`/api/discussions?${params.toString()}`, { headers: getAuthHeaders() });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || data.error || 'Failed to load discussions');
             return data;
@@ -143,7 +144,9 @@ export default function DiscussionsPage() {
             if (!profile) throw new Error('Not authenticated');
             const res = await fetch('/api/discussions', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({
                     ...newThread,
                     authorId: profile._id,
@@ -171,7 +174,9 @@ export default function DiscussionsPage() {
             if (!profile) throw new Error('Not authenticated');
             const res = await fetch(`/api/discussions/${threadId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({ userId: profile._id })
             });
             const data = await res.json();
@@ -216,7 +221,9 @@ export default function DiscussionsPage() {
             if (!profile) throw new Error('Not authenticated');
             const res = await fetch(`/api/discussions/${threadId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({ userId: profile._id, content })
             });
             const data = await res.json();
@@ -257,7 +264,9 @@ export default function DiscussionsPage() {
             if (!profile || !editingThread) throw new Error('Not authenticated or no thread selected');
             const res = await fetch(`/api/discussions/${editingThread._id}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({
                     userId: profile._id,
                     title: editForm.title,

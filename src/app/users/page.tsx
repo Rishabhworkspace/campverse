@@ -6,6 +6,7 @@ import { Navbar } from '@/components/Navbar';
 import { Container, Title, TextInput, Select, SimpleGrid, Card, Text, Badge, Group, Button, LoadingOverlay, Pagination, Modal } from '@mantine/core';
 import { IconSearch, IconMail, IconBrandGmail, IconBrandWindows, IconBrandYahoo } from '@tabler/icons-react';
 import Link from 'next/link';
+import { getAuthHeaders } from '@/lib/api';
 
 interface ListedUser {
   firebaseUid: string;
@@ -46,7 +47,7 @@ export default function UsersDirectoryPage() {
       if (search) params.append('search', search);
       if (branch) params.append('branch', branch);
       if (skill) params.append('skill', skill);
-      const res = await fetch(`/api/users?${params.toString()}`);
+      const res = await fetch(`/api/users?${params.toString()}`, { headers: getAuthHeaders() });
       const json = await res.json();
       setData(json);
     } catch (e) {

@@ -5,6 +5,7 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { IUser } from '@/models/User';
 import { usePathname, useRouter } from 'next/navigation';
+import { getAuthHeaders } from '@/lib/api';
 
 interface AuthContextType {
     user: FirebaseUser | null;
@@ -31,7 +32,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const fetchProfile = async (uid: string) => {
         try {
-            const res = await fetch(`/api/users/${uid}`);
+            const res = await fetch(`/api/users/${uid}`, {
+                headers: getAuthHeaders(),
+            });
             if (res.ok) {
                 const data = await res.json();
                 setProfile(data.user);

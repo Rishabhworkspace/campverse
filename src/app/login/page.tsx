@@ -9,6 +9,7 @@ import { Navbar } from '@/components/Navbar';
 import { IconBrandGoogle, IconX, IconCheck, IconInfoCircle } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { useAuth } from '@/components/AuthProvider';
+import { getAuthHeaders } from '@/lib/api';
 
 export default function LoginPage() {
     const [error, setError] = useState('');
@@ -49,7 +50,9 @@ export default function LoginPage() {
             // Sync user to MongoDB
             const res = await fetch('/api/users', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({
                     firebaseUid: result.user.uid,
                     email: result.user.email,
@@ -82,7 +85,9 @@ export default function LoginPage() {
         try {
             await fetch(`/api/users/${pendingUid}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({ acceptedGuidelines: true }),
             });
             await refreshProfile(); // Update global state

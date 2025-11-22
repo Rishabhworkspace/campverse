@@ -7,6 +7,32 @@ import { useAuth } from '@/components/AuthProvider';
 import { IconDeviceFloppy, IconCheck, IconX, IconTrash, IconRefresh } from '@tabler/icons-react';
 import { deleteUser, GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth';
 import { showError } from '@/lib/error-handling';
+import { getAuthHeaders } from '@/lib/api';
+
+interface Project {
+    _id: string;
+    title: string;
+    description: string;
+    techStack: string[];
+    demoLink?: string;
+    repoLink?: string;
+    isFeatured?: boolean;
+    teamMembers: (string | { _id: string; name: string })[];
+}
+
+interface Skill {
+    _id: string;
+    title: string;
+    type: 'OFFER' | 'REQUEST';
+    status: 'OPEN' | 'CLOSED';
+    description: string;
+    tags: string[];
+}
+
+interface UserResult {
+    _id: string;
+    name: string;
+}
 
 export default function ProfilePage() {
     const { user, profile, refreshProfile } = useAuth();
@@ -57,7 +83,9 @@ export default function ProfilePage() {
         try {
             const res = await fetch(`/api/users/${user.uid}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({
                     name: formData.name,
                     email: user.email || undefined,
@@ -92,17 +120,17 @@ export default function ProfilePage() {
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
     // Added: user assets (projects, skill requests, resources count)
-    const [myProjects, setMyProjects] = useState<any[]>([]);
-    const [mySkills, setMySkills] = useState<any[]>([]);
+    const [myProjects, setMyProjects] = useState<Project[]>([]);
+    const [mySkills, setMySkills] = useState<Skill[]>([]);
     const [myResourcesCount, setMyResourcesCount] = useState<number>(0);
     const [fetchingAssets, setFetchingAssets] = useState(false);
 
     // Edit project modal state
-    const [editProjectModal, setEditProjectModal] = useState<{ open: boolean; project: any | null }>({ open: false, project: null });
+    const [editProjectModal, setEditProjectModal] = useState<{ open: boolean; project: Project | null }>({ open: false, project: null });
     const [editProjectData, setEditProjectData] = useState({
         title: '',
         description: '',
-        techStack: '' as any,
+        techStack: '',
         demoLink: '',
         repoLink: '',
         isFeatured: false,
@@ -110,7 +138,7 @@ export default function ProfilePage() {
     interface Contributor { _id: string; name?: string }
     const [contributors, setContributors] = useState<Contributor[]>([]); // store user objects for display
     const [contributorSearch, setContributorSearch] = useState('');
-    const [contributorResults, setContributorResults] = useState<any[]>([]);
+    const [contributorResults, setContributorResults] = useState<UserResult[]>([]);
     const [searchingContrib, setSearchingContrib] = useState(false);
 
     useEffect(() => {
@@ -120,15 +148,15 @@ export default function ProfilePage() {
                 try {
                     const pid = profile._id;
                     // Fetch projects where user is member
-                    const pRes = await fetch(`/api/projects?memberId=${pid}`);
+                    const pRes = await fetch(`/api/projects?memberId=${pid}`, { headers: getAuthHeaders() });
                     const pData = await pRes.json();
                     setMyProjects(Array.isArray(pData.projects) ? pData.projects : []);
                     // Fetch all skills by user
-                    const sRes = await fetch(`/api/skills?userId=${pid}`);
+                    const sRes = await fetch(`/api/skills?userId=${pid}`, { headers: getAuthHeaders() });
                     const sData = await sRes.json();
                     setMySkills(Array.isArray(sData.skills) ? sData.skills : []);
                     // Fetch resources count
-                    const rRes = await fetch(`/api/resources?uploaderId=${pid}`);
+                    const rRes = await fetch(`/api/resources?uploaderId=${pid}`, { headers: getAuthHeaders() });
                     const rData = await rRes.json();
                     setMyResourcesCount(Array.isArray(rData.resources) ? rData.resources.length : 0);
                 } catch (e) {
@@ -146,14 +174,16 @@ export default function ProfilePage() {
         try {
             const res = await fetch(`/api/skills/${skillId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({ status: newStatus }),
             });
             if (res.ok) {
-                setMySkills(prev => prev.map(s => s._id === skillId ? { ...s, status: newStatus } : s));
+                setMySkills(prev => prev.map(s => s._id === skillId ? { ...s, status: newStatus as 'OPEN' | 'CLOSED' } : s));
                 setNotification({ type: 'success', message: `Skill marked as ${newStatus === 'CLOSED' ? 'completed' : 'open'}` });
             }
-        } catch (e) {
+        } catch {
             setNotification({ type: 'error', message: 'Failed to update skill status' });
         }
     };
@@ -161,17 +191,20 @@ export default function ProfilePage() {
     const handleDeleteSkill = async (skillId: string) => {
         if (!confirm('Delete this skill listing?')) return;
         try {
-            const res = await fetch(`/api/skills/${skillId}`, { method: 'DELETE' });
+            const res = await fetch(`/api/skills/${skillId}`, { 
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
             if (res.ok) {
                 setMySkills(prev => prev.filter(s => s._id !== skillId));
                 setNotification({ type: 'success', message: 'Skill deleted' });
             }
-        } catch (e) {
+        } catch {
             setNotification({ type: 'error', message: 'Failed to delete skill' });
         }
     };
 
-    const openEditProject = (project: any) => {
+    const openEditProject = (project: Project) => {
         setEditProjectData({
             title: project.title || '',
             description: project.description || '',
@@ -182,7 +215,7 @@ export default function ProfilePage() {
         });
         // initialize contributors with teamMembers objects (fallback to id only)
         const members: Contributor[] = Array.isArray(project.teamMembers)
-            ? project.teamMembers.map((m: any) => (typeof m === 'object'
+            ? project.teamMembers.map((m) => (typeof m === 'object'
                 ? { _id: String(m._id), name: m.name }
                 : { _id: String(m) }))
             : [];
@@ -199,7 +232,9 @@ export default function ProfilePage() {
         try {
             const res = await fetch(`/api/projects/${editProjectModal.project._id}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({
                     userId: String(profile._id),
                     title: editProjectData.title,
@@ -236,11 +271,11 @@ export default function ProfilePage() {
         const handle = setTimeout(async () => {
             setSearchingContrib(true);
             try {
-                const res = await fetch(`/api/users?search=${encodeURIComponent(q)}&limit=6`);
+                const res = await fetch(`/api/users?search=${encodeURIComponent(q)}&limit=6`, { headers: getAuthHeaders() });
                 const data = await res.json();
                 if (res.ok && Array.isArray(data.users)) {
                     // filter out already selected contributors
-                    setContributorResults(data.users.filter((u: any) => !contributors.some(c => String(c._id) === String(u._id))));
+                    setContributorResults(data.users.filter((u: UserResult) => !contributors.some(c => String(c._id) === String(u._id))));
                 }
             } catch (e) {
                 console.error('Search contributors failed', e);
@@ -251,7 +286,7 @@ export default function ProfilePage() {
         return () => clearTimeout(handle);
     }, [contributorSearch, contributors]);
 
-    const addContributor = (u: any) => {
+    const addContributor = (u: UserResult) => {
         const id = String(u._id);
         setContributors(prev => prev.some(c => String(c._id) === id) ? prev : [...prev, u]);
         setContributorSearch('');
@@ -267,13 +302,14 @@ export default function ProfilePage() {
         setLoading(true);
         const uid = user.uid;
 
-        const performDelete = async () => {
+            const performDelete = async () => {
             // 1. Delete from Firebase FIRST
             await deleteUser(user);
 
             // 2. Delete from MongoDB
             const res = await fetch(`/api/users/${uid}`, {
                 method: 'DELETE',
+                headers: getAuthHeaders(),
             });
 
             if (!res.ok && res.status !== 404) {
@@ -286,10 +322,12 @@ export default function ProfilePage() {
 
         try {
             await performDelete();
-        } catch (error: any) {
+        } catch (error) {
             console.error('Error deleting account:', error);
             
-            if (error.code === 'auth/requires-recent-login') {
+            const err = error as { code?: string; message?: string };
+
+            if (err.code === 'auth/requires-recent-login') {
                 setNotification({ type: 'error', message: 'Security check: Please sign in again to confirm deletion.' });
                 try {
                     // Attempt re-authentication
@@ -308,7 +346,7 @@ export default function ProfilePage() {
             } else {
                 setNotification({ 
                     type: 'error', 
-                    message: error.message || 'Failed to delete account.' 
+                    message: err.message || 'Failed to delete account.' 
                 });
             }
             setLoading(false);

@@ -39,6 +39,7 @@ import {
   IconHeart,
 } from '@tabler/icons-react';
 import classes from './page.module.css';
+import { getAuthHeaders } from '@/lib/api';
 
 interface StatsData {
   users: number;
@@ -55,7 +56,7 @@ export default function Home() {
     let mounted = true;
     (async () => {
       try {
-        const res = await fetch('/api/stats');
+        const res = await fetch('/api/stats', { headers: getAuthHeaders() });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.detail || err.error || 'Failed stats');

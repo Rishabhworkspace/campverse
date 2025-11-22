@@ -7,6 +7,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { useAuth } from '@/components/AuthProvider';
 import { IconSearch, IconPlus, IconBrandGmail, IconBrandWindows, IconBrandYahoo, IconMail, IconCheck, IconTrash } from '@tabler/icons-react';
 import { showError } from '@/lib/error-handling';
+import { getAuthHeaders } from '@/lib/api';
 
 interface Skill {
     _id: string;
@@ -54,7 +55,7 @@ export default function SkillsPage() {
             if (search) params.append('search', search);
             if (typeFilter) params.append('type', typeFilter);
 
-            const res = await fetch(`/api/skills?${params.toString()}`);
+            const res = await fetch(`/api/skills?${params.toString()}`, { headers: getAuthHeaders() });
             const data = await res.json();
             setSkills(data.skills);
         } catch (error) {
@@ -77,7 +78,9 @@ export default function SkillsPage() {
         try {
             const res = await fetch('/api/skills', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({
                     ...newSkill,
                     userId: profile._id,
@@ -104,7 +107,9 @@ export default function SkillsPage() {
         try {
             const res = await fetch(`/api/skills/${skillId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({ status: 'CLOSED' }),
             });
             if (res.ok) {
@@ -123,6 +128,7 @@ export default function SkillsPage() {
         try {
             const res = await fetch(`/api/skills/${skillId}`, {
                 method: 'DELETE',
+                headers: getAuthHeaders(),
             });
             if (res.ok) {
                 fetchSkills();

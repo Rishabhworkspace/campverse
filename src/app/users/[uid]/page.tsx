@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { Container, Title, Text, Badge, Group, Card, Loader } from '@mantine/core';
+import { getAuthHeaders } from '@/lib/api';
 
 interface UserDetail {
   firebaseUid: string;
@@ -33,7 +34,7 @@ export default function UserProfileView() {
       if (!uid) return;
       setLoading(true);
       try {
-        const res = await fetch(`/api/users/${uid}`);
+        const res = await fetch(`/api/users/${uid}`, { headers: getAuthHeaders() });
         const json = await res.json();
         setUser(json.user);
       } catch (e) {

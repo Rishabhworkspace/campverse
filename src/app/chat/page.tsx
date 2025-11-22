@@ -6,6 +6,7 @@ import { Container, Title, Paper, Tabs, ScrollArea, TextInput, ActionIcon, Group
 import { useAuth } from '@/components/AuthProvider';
 import { IconSend, IconTrash, IconRefresh } from '@tabler/icons-react';
 import { showError } from '@/lib/error-handling';
+import { getAuthHeaders } from '@/lib/api';
 
 interface Message {
     _id: string;
@@ -44,7 +45,7 @@ export default function ChatPage() {
             if (type === 'branch' && branch) query.append('branch', branch);
             if (type === 'year' && year) query.append('year', String(year));
 
-            const res = await fetch(`/api/chat?${query.toString()}`);
+            const res = await fetch(`/api/chat?${query.toString()}`, { headers: getAuthHeaders() });
             const data = await res.json();
             if (res.ok) {
                 // Only update if different to avoid re-renders/scroll jumps if possible, 
@@ -101,7 +102,9 @@ export default function ChatPage() {
         try {
             const res = await fetch('/api/chat', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({
                     content: newMessage,
                     senderId: profile._id,
@@ -130,6 +133,7 @@ export default function ChatPage() {
         try {
             const res = await fetch(`/api/chat/${msgId}?userId=${profile?._id}`, {
                 method: 'DELETE',
+                headers: getAuthHeaders()
             });
             if (res.ok) {
                 fetchMessages();

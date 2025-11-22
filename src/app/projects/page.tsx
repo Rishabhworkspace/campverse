@@ -7,6 +7,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { useAuth } from '@/components/AuthProvider';
 import { IconBrandGithub, IconExternalLink, IconPlus, IconStar } from '@tabler/icons-react';
 import { showError } from '@/lib/error-handling';
+import { getAuthHeaders } from '@/lib/api';
 
 interface ProjectTeamMember {
     _id: string;
@@ -47,7 +48,7 @@ export default function ProjectsPage() {
     const fetchProjects = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/projects');
+            const res = await fetch('/api/projects', { headers: getAuthHeaders() });
             const data = await res.json();
             setProjects(data.projects);
         } catch (error) {
@@ -75,7 +76,9 @@ export default function ProjectsPage() {
         try {
             const res = await fetch('/api/projects', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({
                     ...newProject,
                     techStack: newProject.techStack.split(',').map(t => t.trim()).filter(t => t),
@@ -124,7 +127,7 @@ export default function ProjectsPage() {
                                             project.images?.[0]
                                                 ? project.images[0]
                                                 : project.demoLink
-                                                    ? `/api/screenshot?url=${encodeURIComponent(project.demoLink)}`
+                                                    ? `/api/screenshot?url=${encodeURIComponent(project.demoLink)}` // Screenshot API might need auth too, but it's an img src. Middleware might block it.
                                                     : 'https://placehold.co/600x400?text=No+Preview'
                                         }
                                         alt={project.title}
