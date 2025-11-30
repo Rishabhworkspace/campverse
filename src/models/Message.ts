@@ -4,9 +4,10 @@ export interface IMessage extends Document {
     content: string;
     senderId: mongoose.Types.ObjectId;
     senderName: string;
-    type: 'universal' | 'branch' | 'year';
+    type: 'universal' | 'branch' | 'year' | 'dm';
     branch?: string;
     year?: number;
+    recipientId?: mongoose.Types.ObjectId;
     replyTo?: {
         _id: mongoose.Types.ObjectId;
         content: string;
@@ -36,7 +37,7 @@ const MessageSchema: Schema<IMessage> = new Schema({
     },
     type: {
         type: String,
-        enum: ['universal', 'branch', 'year'],
+        // enum: ['universal', 'branch', 'year', 'dm'],
         required: true,
     },
     branch: {
@@ -44,6 +45,10 @@ const MessageSchema: Schema<IMessage> = new Schema({
     },
     year: {
         type: Number,
+    },
+    recipientId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
     },
     replyTo: {
         _id: { type: Schema.Types.ObjectId, ref: 'Message' },
@@ -66,4 +71,5 @@ if (mongoose.models.Message) {
 
 const Message: Model<IMessage> = mongoose.model<IMessage>('Message', MessageSchema);
 
+// Updated schema for DM support
 export default Message;

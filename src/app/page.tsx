@@ -114,11 +114,11 @@ export default function Home() {
                     gradient={{ from: 'violet', to: 'blue' }}
                     rightSection={<IconArrowRight size={20} />}
                   >
-                    Go to Dashboard
+         Complete Your Profile
                   </Button>
                 )}
                 <Button component={Link} href="/skills" size="xl" radius="xl" variant="default" leftSection={<IconRocket size={20} />}>
-                  Explore Features
+                 Find Skills
                 </Button>
               </Group>
 
@@ -143,7 +143,7 @@ export default function Home() {
             <Grid.Col span={{ base: 12, md: 6 }}>
               <Title order={2} mb="md">Built by Students, For Students</Title>
               <Text size="lg" c="dimmed" mb="xl">
-                We understand the college hustle. Finding notes, looking for hackathon teammates, or just needing advice on which elective to pick—it can be chaotic.
+                We understand the college hustle. Finding notes, looking for hackathon teammates, or just needing advice on which elective to pick, it can be chaotic.
               </Text>
               <Text size="lg" c="dimmed" mb="xl">
                 CollegeConnect brings order to the chaos. We provide a structured platform where you can:
@@ -250,7 +250,7 @@ export default function Home() {
         </Container>
       </section>
 
-      {/* CTA */}
+  
       <section className={classes.ctaWrap}>
         <Container size="lg">
           <Card className={classes.cta} radius="xl" p={50} withBorder>
@@ -294,7 +294,7 @@ export default function Home() {
               </Text>
               <Group gap="xs" mt="md">
                 <ActionIcon size="lg" variant="subtle" color="gray"><IconBrandGithub size={18} /></ActionIcon>
-                <ActionIcon size="lg" variant="subtle" color="gray"><IconBrandTwitter size={18} /></ActionIcon>
+                {/* <ActionIcon size="lg" variant="subtle" color="gray"><IconBrandTwitter size={18} /></ActionIcon> */}
                 <ActionIcon size="lg" variant="subtle" color="gray"><IconBrandLinkedin size={18} /></ActionIcon>
               </Group>
             </Stack>

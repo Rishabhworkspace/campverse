@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Types } from 'mongoose';
 import dbConnect from '@/lib/db';
 import Message from '@/models/Message';
 import User from '@/models/User';
@@ -12,6 +13,8 @@ export async function GET(req: NextRequest) {
         const branch = searchParams.get('branch');
         const year = searchParams.get('year');
         const userId = searchParams.get('userId');
+
+        const recipientId = searchParams.get('recipientId');
 
         if (!type) {
             return NextResponse.json({ error: 'Invalid query parameters' }, { status: 400 });
@@ -27,14 +30,84 @@ export async function GET(req: NextRequest) {
         const onlineCount = await User.countDocuments({ lastActive: { $gte: fiveMinutesAgo } });
         const totalUsers = await User.countDocuments({});
 
-        const query: any = { type };
+        if (type === 'conversations') {
+            if (!userId) return NextResponse.json({ error: 'User ID required' }, { status: 400 });
+            
+            // Find all DM messages involving this user to get unique contacts
+            // Optimization: Use aggregation to get unique other parties
+            const conversations = await Message.aggregate([
+                {
+                    $match: {
+                        type: 'dm',
+                        $or: [{ senderId: userId }, { recipientId: userId }]
+                    }
+                },
+                {
+                    $sort: { createdAt: -1 }
+                },
+                {
+                    $group: {
+                        _id: {
+                            $cond: [{ $eq: ["$senderId", userId] }, "$recipientId", "$senderId"]
+                        },
+                        lastMessage: { $first: "$$ROOT" }
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "_id",
+                        foreignField: "_id", // Assuming _id is stored as string in Message but ObjectId in User. If Message stores string, we might need conversion. 
+                        // Actually Message schema defines senderId as String. User _id is ObjectId. 
+                        // Mongoose/Mongo usually handles this if we cast, but in aggregation it's tricky.
+                        // Let's try simple find first to avoid type mismatch issues if IDs are strings vs ObjectIds.
+                        as: "userDetails"
+                    }
+                }
+            ]);
+            
+            // Since aggregation with lookup on String vs ObjectId is painful without $toObjectId (which requires Mongo 4.0+), 
+            // and we are using Mongoose where _id is ObjectId but we store strings in Message...
+            // Let's do it in application layer for safety and simplicity.
+            
+            const distinctUserIds = await Message.find({
+                type: 'dm',
+                $or: [{ senderId: userId }, { recipientId: userId }]
+            }).distinct('senderId');
+            
+            const distinctRecipientIds = await Message.find({
+                type: 'dm',
+                $or: [{ senderId: userId }, { recipientId: userId }]
+            }).distinct('recipientId');
+            
+            const normalizedIds = [...distinctUserIds, ...distinctRecipientIds]
+                .map(id => (typeof id === 'string' ? id : (id as Types.ObjectId | undefined)?.toString()))
+                .filter((id): id is string => Boolean(id && id !== userId));
+
+            const uniqueIds = Array.from(new Set(normalizedIds));
+            
+            const users = await User.find({ _id: { $in: uniqueIds } })
+                .select('name _id firebaseUid photoURL');
+
+            return NextResponse.json({ conversations: users }, { status: 200 });
+        }
+
+        let query: any = { type };
         if (type === 'branch') {
             if (!branch) return NextResponse.json({ error: 'Branch required' }, { status: 400 });
             query.branch = branch;
-        }
-        if (type === 'year') {
+        } else if (type === 'year') {
             if (!year) return NextResponse.json({ error: 'Year required' }, { status: 400 });
             query.year = Number(year);
+        } else if (type === 'dm') {
+            if (!userId || !recipientId) return NextResponse.json({ error: 'User ID and Recipient ID required for DM' }, { status: 400 });
+            query = {
+                type: 'dm',
+                $or: [
+                    { senderId: userId, recipientId: recipientId },
+                    { senderId: recipientId, recipientId: userId }
+                ]
+            };
         }
 
         const totalMessages = await Message.countDocuments(query);
@@ -54,7 +127,7 @@ export async function POST(req: NextRequest) {
     try {
         await dbConnect();
         const body = await req.json();
-        const { content, senderId, type, branch, year, replyTo, sticker } = body;
+        const { content, senderId, type, branch, year, replyTo, sticker, recipientId } = body;
 
         if ((!content && !sticker) || !senderId || !type) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -64,6 +137,21 @@ export async function POST(req: NextRequest) {
         const sender = await User.findById(senderId);
         if (!sender) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        // Check for blocks in DM
+        if (type === 'dm' && recipientId) {
+            const recipient = await User.findById(recipientId);
+            if (recipient) {
+                // Check if recipient has blocked sender
+                if (recipient.blockedUsers?.includes(senderId)) {
+                    return NextResponse.json({ error: 'Message not sent: You have been blocked by this user.' }, { status: 403 });
+                }
+                // Check if sender has blocked recipient
+                if (sender.blockedUsers?.includes(recipientId)) {
+                    return NextResponse.json({ error: 'Message not sent: You have blocked this user. Unblock them to send messages.' }, { status: 403 });
+                }
+            }
         }
 
         // Moderation check
@@ -90,6 +178,8 @@ export async function POST(req: NextRequest) {
             if (sender.year && Number(sender.year) !== Number(year)) {
                 return NextResponse.json({ error: `Wrong year. You are in Year ${sender.year}, but trying to post to Year ${year}` }, { status: 403 });
             }
+        } else if (type === 'dm') {
+            if (!recipientId) return NextResponse.json({ error: 'Recipient ID is required for DM' }, { status: 400 });
         }
 
         const messageData: any = {
@@ -99,6 +189,7 @@ export async function POST(req: NextRequest) {
             type,
             branch: type === 'branch' ? branch : undefined,
             year: type === 'year' ? year : undefined,
+            recipientId: type === 'dm' ? recipientId : undefined,
             sticker
         };
 

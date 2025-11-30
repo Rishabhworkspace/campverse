@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
-import { Container, Title, Paper, Tabs, ScrollArea, TextInput, ActionIcon, Group, Text, Avatar, Center, Tooltip, Badge, Menu, Button, Box } from '@mantine/core';
+import { Container, Title, Paper, Tabs, ScrollArea, TextInput, ActionIcon, Group, Text, Avatar, Center, Tooltip, Badge, Menu, Button, Box, Stack, Modal, UnstyledButton } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { useAuth } from '@/components/AuthProvider';
-import { IconSend, IconTrash, IconRefresh, IconMoodSmile, IconArrowBackUp, IconX, IconSticker, IconThumbUp, IconHeart, IconMoodHappy, IconMoodSurprised, IconMoodSad, IconFlame, IconSearch, IconArrowDown } from '@tabler/icons-react';
+import { IconSend, IconTrash, IconRefresh, IconMoodSmile, IconArrowBackUp, IconX, IconSticker, IconThumbUp, IconHeart, IconMoodHappy, IconMoodSurprised, IconMoodSad, IconFlame, IconSearch, IconArrowDown, IconHash, IconBuilding, IconCalendar, IconMessage, IconUserPlus, IconBan, IconDotsVertical, IconArrowLeft } from '@tabler/icons-react';
 import { showError } from '@/lib/error-handling';
 import { getAuthHeaders } from '@/lib/api';
 
@@ -18,7 +20,7 @@ interface Message {
     content: string;
     senderId: string;
     senderName: string;
-    type: 'universal' | 'branch' | 'year';
+    type: 'universal' | 'branch' | 'year' | 'dm';
     branch?: string;
     year?: number;
     createdAt: string;
@@ -57,8 +59,11 @@ const STICKERS = [
     'https://cdn-icons-png.flaticon.com/512/1651/1651586.png', // Laptop
 ];
 
-export default function ChatPage() {
-    const { user, profile } = useAuth();
+function ChatPageContent() {
+    const { user, profile, refreshProfile } = useAuth();
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const dmRecipientId = searchParams.get('dm');
     const [activeTab, setActiveTab] = useState<string | null>('universal');
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
@@ -71,8 +76,101 @@ export default function ChatPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [replyingTo, setReplyingTo] = useState<Message | null>(null);
     const [showScrollButton, setShowScrollButton] = useState(false);
+    const [dmUser, setDmUser] = useState<{ name: string } | null>(null);
+    const [recentDms, setRecentDms] = useState<any[]>([]);
+    
+    // New State
+    const [searchModalOpen, setSearchModalOpen] = useState(false);
+    const [userSearchQuery, setUserSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
+    
+    const isMobile = useMediaQuery('(max-width: 768px)');
+    const [showSidebar, setShowSidebar] = useState(true);
 
     const isVITStudent = user?.email?.endsWith('@vitstudent.ac.in');
+
+    useEffect(() => {
+        if (profile?.blockedUsers) {
+            setBlockedUsers(profile.blockedUsers);
+        }
+    }, [profile]);
+
+    const handleSearchUsers = async (query: string) => {
+        setUserSearchQuery(query);
+        if (query.length < 2) {
+            setSearchResults([]);
+            return;
+        }
+        try {
+            const res = await fetch(`/api/users?search=${query}&limit=5`, { headers: getAuthHeaders() });
+            const data = await res.json();
+            if (data.users) setSearchResults(data.users);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const startDm = (userId: string) => {
+        setSearchModalOpen(false);
+        router.push(`/chat?dm=${userId}`);
+    };
+
+    const handleBlockUser = async () => {
+        if (!dmRecipientId || !profile) return;
+        const isBlocked = blockedUsers.includes(dmRecipientId);
+        const action = isBlocked ? 'unblock' : 'block';
+        
+        if (!confirm(`Are you sure you want to ${action} this user?`)) return;
+
+        try {
+            const res = await fetch('/api/users/block', {
+                method: 'POST',
+                headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: profile._id,
+                    targetUserId: dmRecipientId,
+                    action
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setBlockedUsers(data.blockedUsers);
+                // Update local profile if needed, or just rely on state
+                refreshProfile(); 
+                showError({ message: `User ${action}ed successfully` }, 'Success');
+            }
+        } catch (error) {
+            showError(error, 'Block Failed');
+        }
+    };
+
+    useEffect(() => {
+        if (profile?._id) {
+            fetch(`/api/chat?type=conversations&userId=${profile._id}`, { headers: getAuthHeaders() })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.conversations) setRecentDms(data.conversations);
+                })
+                .catch(console.error);
+        }
+    }, [profile, activeTab]); // Refresh when tab changes (e.g. new message sent)
+
+    useEffect(() => {
+        if (dmRecipientId) {
+            setActiveTab('dm');
+            if (isMobile) setShowSidebar(false);
+            (async () => {
+                try {
+                    const res = await fetch(`/api/users/${dmRecipientId}`, { headers: getAuthHeaders() });
+                    const data = await res.json();
+                    if (data.user) setDmUser(data.user);
+                } catch (e) {
+                    console.error(e);
+                }
+            })();
+        }
+    }, [dmRecipientId]);
 
     const fetchMessages = async () => {
         if (!activeTab) return;
@@ -83,11 +181,13 @@ export default function ChatPage() {
 
         if (type === 'branch' && !branch) return;
         if (type === 'year' && !year) return;
+        if (type === 'dm' && !dmRecipientId) return;
 
         try {
             const query = new URLSearchParams({ type });
             if (type === 'branch' && branch) query.append('branch', branch);
             if (type === 'year' && year) query.append('year', String(year));
+            if (type === 'dm' && dmRecipientId) query.append('recipientId', dmRecipientId);
             if (profile?._id) query.append('userId', String(profile._id));
 
             const res = await fetch(`/api/chat?${query.toString()}`, { headers: getAuthHeaders() });
@@ -164,6 +264,7 @@ export default function ChatPage() {
                     type,
                     branch: type === 'branch' ? branch : undefined,
                     year: type === 'year' ? Number(year) : undefined,
+                    recipientId: type === 'dm' ? dmRecipientId : undefined,
                     replyTo: replyingTo ? {
                         _id: replyingTo._id,
                         content: replyingTo.content,
@@ -249,280 +350,464 @@ export default function ChatPage() {
     return (
         <>
             <Navbar />
-            <Container size="md" py="xl" h="calc(100vh - 80px)">
-                <Paper withBorder shadow="sm" p="md" radius="md" h="100%" display="flex" style={{ flexDirection: 'column' }}>
-                    <Tabs value={activeTab} onChange={setActiveTab} mb="md">
-                        <Tabs.List grow>
-                            <Tabs.Tab value="universal">Universal</Tabs.Tab>
-                            <Tabs.Tab value="branch" disabled={!profile?.branch}>
-                                {profile?.branch ? `${profile.branch}` : 'Branch (Set in Profile)'}
-                            </Tabs.Tab>
-                            <Tabs.Tab value="year" disabled={!profile?.year}>
-                                {profile?.year ? `Year ${profile.year}` : 'Year (Set in Profile)'}
-                            </Tabs.Tab>
-                            <Tooltip label="Refresh Messages">
-                                <ActionIcon variant="subtle" color="gray" onClick={fetchMessages} ml="auto" my="auto" mr="xs">
-                                    <IconRefresh size={16} />
-                                </ActionIcon>
-                            </Tooltip>
-                        </Tabs.List>
-                    </Tabs>
+            <Container size="xl" py={isMobile ? 0 : 'xl'} h={isMobile ? 'calc(100dvh - 60px)' : 'calc(100vh - 80px)'} px={isMobile ? 0 : 'md'}>
+                <Paper 
+                    withBorder={!isMobile} 
+                    shadow={isMobile ? 'none' : 'sm'} 
+                    radius={isMobile ? 0 : 'md'} 
+                    h="100%" 
+                    style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+                >
+                    <Box style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+                        <Box
+                            component="aside"
+                            style={{
+                                borderRight: '1px solid var(--mantine-color-default-border)',
+                                minHeight: 0,
+                                width: isMobile ? '100%' : 320,
+                                maxWidth: isMobile ? '100%' : 360,
+                                flexShrink: 0,
+                                display: isMobile && !showSidebar ? 'none' : 'flex',
+                                flexDirection: 'column'
+                            }}
+                        >
+                            <Stack p="md" gap="xs" style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+                                <Group justify="space-between" mb="xs">
+                                    <Text fw={700} c="dimmed" size="xs" tt="uppercase">Channels</Text>
+                                    <Tooltip label="Refresh Messages">
+                                        <ActionIcon variant="subtle" color="gray" onClick={fetchMessages} size="xs">
+                                            <IconRefresh size={14} />
+                                        </ActionIcon>
+                                    </Tooltip>
+                                </Group>
+                                
+                                <Button 
+                                    variant={activeTab === 'universal' ? 'filled' : 'subtle'} 
+                                    color={activeTab === 'universal' ? 'blue' : 'gray'}
+                                    onClick={() => {
+                                        setActiveTab('universal');
+                                        if (isMobile) setShowSidebar(false);
+                                    }}
+                                    justify="flex-start"
+                                    leftSection={<IconHash size={16} />}
+                                    fullWidth
+                                >
+                                    Universal
+                                </Button>
+                                <Button 
+                                    variant={activeTab === 'branch' ? 'filled' : 'subtle'} 
+                                    color={activeTab === 'branch' ? 'blue' : 'gray'}
+                                    onClick={() => {
+                                        setActiveTab('branch');
+                                        if (isMobile) setShowSidebar(false);
+                                    }}
+                                    disabled={!profile?.branch}
+                                    justify="flex-start"
+                                    leftSection={<IconBuilding size={16} />}
+                                    fullWidth
+                                >
+                                    {profile?.branch ? `${profile.branch}` : 'Branch'}
+                                </Button>
+                                <Button 
+                                    variant={activeTab === 'year' ? 'filled' : 'subtle'} 
+                                    color={activeTab === 'year' ? 'blue' : 'gray'}
+                                    onClick={() => {
+                                        setActiveTab('year');
+                                        if (isMobile) setShowSidebar(false);
+                                    }}
+                                    disabled={!profile?.year}
+                                    justify="flex-start"
+                                    leftSection={<IconCalendar size={16} />}
+                                    fullWidth
+                                >
+                                    {profile?.year ? `Year ${profile.year}` : 'Year'}
+                                </Button>
 
-                    <Group justify="space-between" mb="xs" px="xs" align="center">
-                        <Group gap="xs">
-                            <Badge color="green" variant="dot">
-                                {onlineCount} Online
-                            </Badge>
-                            <Badge color="blue" variant="light">
-                                {totalUsers} Total Users
-                            </Badge>
-                            <Badge color="gray" variant="outline">
-                                {totalMessages} Msgs
-                            </Badge>
-                        </Group>
-                        <TextInput 
-                            placeholder="Search..." 
-                            size="xs" 
-                            leftSection={<IconSearch size={12} />}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            style={{ width: 150 }}
-                        />
-                    </Group>
+                                <Group justify="space-between" mt="md" mb="xs">
+                                    <Text fw={700} c="dimmed" size="xs" tt="uppercase">Direct Messages</Text>
+                                    <Tooltip label="New Chat">
+                                        <ActionIcon variant="subtle" color="gray" size="xs" onClick={() => setSearchModalOpen(true)}>
+                                            <IconUserPlus size={14} />
+                                        </ActionIcon>
+                                    </Tooltip>
+                                </Group>
 
-                    <ScrollArea 
-                        flex={1} 
-                        viewportRef={viewport} 
-                        mb="md" 
-                        type="always" 
-                        offsetScrollbars
-                        onScrollPositionChange={onScrollPositionChange}
-                        style={{ position: 'relative' }}
-                    >
-                        {showScrollButton && (
-                            <ActionIcon 
-                                variant="filled" 
-                                color="blue" 
-                                radius="xl" 
-                                size="lg"
-                                style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.2)' }}
-                                onClick={scrollToBottom}
-                            >
-                                <IconArrowDown size={20} />
-                            </ActionIcon>
-                        )}
+                                {recentDms.map(dm => (
+                                    <Button 
+                                        key={dm._id}
+                                        variant={activeTab === 'dm' && dmRecipientId === dm._id ? 'filled' : 'subtle'} 
+                                        color={activeTab === 'dm' && dmRecipientId === dm._id ? 'blue' : 'gray'}
+                                        onClick={() => {
+                                            router.push(`/chat?dm=${dm._id}`);
+                                            if (isMobile) setShowSidebar(false);
+                                        }}
+                                        justify="flex-start"
+                                        leftSection={<Avatar size={16} radius="xl" src={dm.photoURL} color="blue">{dm.name?.[0]}</Avatar>}
+                                        fullWidth
+                                        style={{ textTransform: 'none' }}
+                                    >
+                                        <Text truncate size="sm">{dm.name}</Text>
+                                    </Button>
+                                ))}
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingRight: 10 }}>
-                            {filteredMessages.map((msg) => {
-                                const myId = String(profile?._id ?? '');
-                                const isMe = msg.senderId === myId;
-                                return (
-                                    <Group key={msg._id} align="flex-start" justify={isMe ? 'flex-end' : 'flex-start'} gap="xs" wrap="nowrap">
-                                        {!isMe && (
-                                            <Avatar radius="xl" size="sm" color="blue">{msg.senderName?.[0]}</Avatar>
+                                {dmRecipientId && !recentDms.find(d => d._id === dmRecipientId) && (
+                                    <Button 
+                                        variant="filled"
+                                        color="blue"
+                                        justify="flex-start"
+                                        leftSection={<IconMessage size={16} />}
+                                        fullWidth
+                                    >
+                                        {dmUser ? dmUser.name : 'Chat'}
+                                    </Button>
+                                )}
+                            </Stack>
+                        </Box>
+
+                        <Box
+                            component="section"
+                            style={{
+                                flex: 1,
+                                display: isMobile && showSidebar ? 'none' : 'flex',
+                                flexDirection: 'column',
+                                minHeight: 0
+                            }}
+                        >
+                            <Box p="md" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
+                                <Group justify="space-between" wrap="nowrap">
+                                    <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+                                        {isMobile && (
+                                            <ActionIcon variant="subtle" color="gray" onClick={() => setShowSidebar(true)}>
+                                                <IconArrowLeft size={20} />
+                                            </ActionIcon>
                                         )}
-                                        <div style={{ maxWidth: '70%', display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
-                                            <Group gap={6} mb={2}>
-                                                {!isMe && <Text size="xs" fw={700} c="dimmed">{msg.senderName}</Text>}
-                                                <Text size="xs" c="dimmed" style={{ fontSize: 10 }}>
-                                                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </Text>
-                                            </Group>
-                                            
-                                            {msg.replyTo && (
-                                                <Paper 
-                                                    p="xs" 
-                                                    mb={4} 
-                                                    bg={isMe ? 'rgba(255, 255, 255, 0.2)' : 'white'} 
-                                                    radius="sm" 
-                                                    style={{ 
-                                                        borderLeft: `3px solid ${isMe ? 'white' : '#228be6'}`, 
-                                                        fontSize: '0.85rem', 
-                                                        cursor: 'pointer',
-                                                        color: isMe ? 'white' : 'black'
-                                                    }}
-                                                >
-                                                    <Text size="xs" fw={700} c={isMe ? 'white' : 'black'}>{msg.replyTo.senderName}</Text>
-                                                    <Text size="xs" lineClamp={1} c={isMe ? 'rgba(255,255,255,0.8)' : 'dimmed'}>{msg.replyTo.content}</Text>
-                                                </Paper>
-                                            )}
-
-                                            {msg.sticker ? (
-                                                <img src={msg.sticker} alt="sticker" style={{ width: 100, height: 100, objectFit: 'contain' }} />
-                                            ) : (
-                                                <Paper
-                                                    p="sm"
-                                                    radius="md"
-                                                    bg={isMe ? 'blue.6' : 'gray.1'}
-                                                    c={isMe ? 'white' : 'black'}
-                                                    style={{
-                                                        borderTopRightRadius: isMe ? 0 : undefined,
-                                                        borderTopLeftRadius: !isMe ? 0 : undefined,
-                                                        position: 'relative'
-                                                    }}
-                                                >
-                                                    <Text size="sm" style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.content}</Text>
-                                                </Paper>
-                                            )}
-
-                                            {/* Reactions Display */}
-                                            {msg.reactions && msg.reactions.length > 0 && (
-                                                <Group gap={4} mt={4}>
-                                                    {Array.from(new Set(msg.reactions.map(r => r.emoji))).map(emoji => {
-                                                        const count = msg.reactions.filter(r => r.emoji === emoji).length;
-                                                        const userReacted = msg.reactions.some(r => r.emoji === emoji && r.userId === myId);
-                                                        const Icon = REACTION_ICONS[emoji];
-                                                        return (
-                                                            <Badge 
-                                                                key={emoji} 
-                                                                size="xs" 
-                                                                variant={userReacted ? "filled" : "light"} 
-                                                                color="gray"
-                                                                style={{ cursor: 'pointer', textTransform: 'none', paddingLeft: 6, paddingRight: 6 }}
-                                                                onClick={() => handleReaction(msg._id, emoji)}
-                                                            >
-                                                                <Group gap={4} align="center">
-                                                                    {Icon ? <Icon size={12} /> : emoji}
-                                                                    <span>{count}</span>
-                                                                </Group>
-                                                            </Badge>
-                                                        );
-                                                    })}
-                                                </Group>
-                                            )}
-
-                                            <Group gap={4} mt={2} style={{ opacity: 0.5 }}>
-                                                <ActionIcon 
-                                                    variant="subtle" 
-                                                    color="gray" 
-                                                    size="xs" 
-                                                    onClick={() => setReplyingTo(msg)}
-                                                >
-                                                    <IconArrowBackUp size={12} />
-                                                </ActionIcon>
-                                                
-                                                <Menu shadow="md" width={200}>
-                                                    <Menu.Target>
-                                                        <ActionIcon variant="subtle" color="gray" size="xs">
-                                                            <IconMoodSmile size={12} />
-                                                        </ActionIcon>
-                                                    </Menu.Target>
-                                                    <Menu.Dropdown>
-                                                        <Group gap={4} p={4} justify="center">
-                                                            {Object.entries(REACTION_ICONS).map(([emoji, Icon]) => (
-                                                                <ActionIcon 
-                                                                    key={emoji} 
-                                                                    variant="subtle" 
-                                                                    onClick={() => handleReaction(msg._id, emoji)}
-                                                                >
-                                                                    <Icon size={18} />
-                                                                </ActionIcon>
-                                                            ))}
-                                                        </Group>
-                                                    </Menu.Dropdown>
-                                                </Menu>
-
-                                                {isMe && (
-                                                    <ActionIcon 
-                                                        variant="subtle" 
-                                                        color="gray" 
-                                                        size="xs" 
-                                                        onClick={() => handleDeleteMessage(msg._id)}
-                                                    >
-                                                        <IconTrash size={12} />
+                                        <Box style={{ flex: 1, minWidth: 0 }}>
+                                            <Title order={4} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                {activeTab === 'universal' && '# Universal Chat'}
+                                                {activeTab === 'branch' && `# ${profile?.branch} Chat`}
+                                                {activeTab === 'year' && `# Year ${profile?.year} Chat`}
+                                                {activeTab === 'dm' && `@ ${dmUser?.name || 'User'}`}
+                                            </Title>
+                                        </Box>
+                                        {activeTab !== 'dm' && (
+                                            <Badge color="green" variant="dot" size="sm" style={{ flexShrink: 0 }}>
+                                                {onlineCount} Online
+                                            </Badge>
+                                        )}
+                                        {activeTab === 'dm' && dmRecipientId && (
+                                            <Menu shadow="md" width={200}>
+                                                <Menu.Target>
+                                                    <ActionIcon variant="subtle" color="gray">
+                                                        <IconDotsVertical size={16} />
                                                     </ActionIcon>
-                                                )}
-                                            </Group>
-                                        </div>
-                                        {isMe && (
-                                            <Avatar radius="xl" size="sm" color="blue" src={user.photoURL}>{msg.senderName?.[0]}</Avatar>
+                                                </Menu.Target>
+                                                <Menu.Dropdown>
+                                                    <Menu.Item 
+                                                        color={blockedUsers.includes(dmRecipientId) ? 'green' : 'red'}
+                                                        leftSection={<IconBan size={14} />}
+                                                        onClick={handleBlockUser}
+                                                    >
+                                                        {blockedUsers.includes(dmRecipientId) ? 'Unblock User' : 'Block User'}
+                                                    </Menu.Item>
+                                                </Menu.Dropdown>
+                                            </Menu>
                                         )}
                                     </Group>
-                                );
-                            })}
-                            {messages.length === 0 && (
-                                <Center h={200}>
-                                    <Text c="dimmed">No messages yet. Start the conversation!</Text>
-                                </Center>
-                            )}
-                        </div>
-                    </ScrollArea>
-
-                    {replyingTo && (
-                        <Paper 
-                            p="sm" 
-                            mb="xs" 
-                            bg="gray.0" 
-                            withBorder 
-                            radius="md"
-                            style={{ 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'center',
-                                borderLeft: '4px solid #228be6'
-                            }}
-                        >
-                            <Box>
-                                <Text size="xs" fw={700} c="blue">Replying to {replyingTo.senderName}</Text>
-                                <Text size="sm" lineClamp={1} c="dimmed">{replyingTo.content}</Text>
-                            </Box>
-                            <ActionIcon variant="subtle" color="gray" onClick={() => setReplyingTo(null)}>
-                                <IconX size={16} />
-                            </ActionIcon>
-                        </Paper>
-                    )}
-
-                    <Group gap="xs" align="flex-end">
-                        <Menu shadow="md" width={200} position="top-start">
-                            <Menu.Target>
-                                <ActionIcon variant="subtle" color="gray" size="lg" radius="xl" mb={4}>
-                                    <IconSticker size={24} />
-                                </ActionIcon>
-                            </Menu.Target>
-                            <Menu.Dropdown>
-                                <Text size="xs" c="dimmed" p="xs">Send a sticker</Text>
-                                <Group gap="xs" p="xs" style={{ maxWidth: 300 }}>
-                                    {STICKERS.map((sticker, index) => (
-                                        <ActionIcon 
-                                            key={index} 
-                                            variant="subtle" 
-                                            size="xl" 
-                                            onClick={() => handleSendMessage(sticker)}
-                                        >
-                                            <img src={sticker} alt="sticker" style={{ width: 30, height: 30 }} />
-                                        </ActionIcon>
-                                    ))}
+                                    {!isMobile && (
+                                        <TextInput 
+                                            placeholder="Search..." 
+                                            size="xs" 
+                                            leftSection={<IconSearch size={12} />}
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            style={{ width: 200 }}
+                                        />
+                                    )}
                                 </Group>
-                            </Menu.Dropdown>
-                        </Menu>
+                            </Box>
 
-                        <TextInput
-                            placeholder={`Message ${activeTab} chat...`}
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleSendMessage();
-                                }
-                            }}
-                            style={{ flex: 1 }}
-                            size="md"
-                            radius="xl"
-                        />
-                        <ActionIcon 
-                            variant="filled" 
-                            color="blue" 
-                            size={42} 
-                            radius="xl" 
-                            onClick={() => handleSendMessage()} 
-                            disabled={!newMessage.trim()}
-                        >
-                            <IconSend size={20} />
-                        </ActionIcon>
-                    </Group>
+                            <ScrollArea 
+                                viewportRef={viewport} 
+                                p="md" 
+                                type="always" 
+                                offsetScrollbars
+                                onScrollPositionChange={onScrollPositionChange}
+                                style={{ position: 'relative', flex: 1, minHeight: 0 }}
+                            >
+                                {showScrollButton && (
+                                    <ActionIcon 
+                                        variant="filled" 
+                                        color="blue" 
+                                        radius="xl" 
+                                        size="lg"
+                                        style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.2)' }}
+                                        onClick={scrollToBottom}
+                                    >
+                                        <IconArrowDown size={20} />
+                                    </ActionIcon>
+                                )}
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingRight: 10 }}>
+                                    {filteredMessages.map((msg) => {
+                                        const myId = String(profile?._id ?? '');
+                                        const isMe = msg.senderId === myId;
+                                        return (
+                                            <Group key={msg._id} align="flex-start" justify={isMe ? 'flex-end' : 'flex-start'} gap="xs" wrap="nowrap">
+                                                {!isMe && (
+                                                    <Avatar radius="xl" size="sm" color="blue">{msg.senderName?.[0]}</Avatar>
+                                                )}
+                                                <div style={{ maxWidth: '70%', display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+                                                    <Group gap={6} mb={2}>
+                                                        {!isMe && <Text size="xs" fw={700} c="dimmed">{msg.senderName}</Text>}
+                                                        <Text size="xs" c="dimmed" style={{ fontSize: 10 }}>
+                                                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </Text>
+                                                    </Group>
+                                                    
+                                                    {msg.replyTo && (
+                                                        <Paper 
+                                                            p="xs" 
+                                                            mb={4} 
+                                                            bg={isMe ? 'rgba(255, 255, 255, 0.15)' : 'var(--mantine-color-default-hover)'} 
+                                                            radius="sm" 
+                                                            style={{ 
+                                                                borderLeft: `3px solid ${isMe ? 'rgba(255,255,255,0.8)' : '#228be6'}`, 
+                                                                fontSize: '0.85rem', 
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            <Text size="xs" fw={700} c={isMe ? 'white' : 'dimmed'}>{msg.replyTo.senderName}</Text>
+                                                            <Text size="xs" lineClamp={1} c={isMe ? 'rgba(255,255,255,0.9)' : 'dimmed'}>{msg.replyTo.content}</Text>
+                                                        </Paper>
+                                                    )}
+
+                                                    {msg.sticker ? (
+                                                        <img src={msg.sticker} alt="sticker" style={{ width: 100, height: 100, objectFit: 'contain' }} />
+                                                    ) : (
+                                                        <Paper
+                                                            p="sm"
+                                                            radius="md"
+                                                            bg={isMe ? 'blue.6' : 'var(--mantine-color-default-hover)'}
+                                                            style={{
+                                                                borderTopRightRadius: isMe ? 0 : undefined,
+                                                                borderTopLeftRadius: !isMe ? 0 : undefined,
+                                                                position: 'relative'
+                                                            }}
+                                                        >
+                                                            <Text size="sm" c={isMe ? 'white' : 'inherit'} style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.content}</Text>
+                                                        </Paper>
+                                                    )}
+
+                                                    {/* Reactions Display */}
+                                                    {msg.reactions && msg.reactions.length > 0 && (
+                                                        <Group gap={4} mt={4}>
+                                                            {Array.from(new Set(msg.reactions.map(r => r.emoji))).map(emoji => {
+                                                                const count = msg.reactions.filter(r => r.emoji === emoji).length;
+                                                                const userReacted = msg.reactions.some(r => r.emoji === emoji && r.userId === myId);
+                                                                const Icon = REACTION_ICONS[emoji];
+                                                                return (
+                                                                    <Badge 
+                                                                        key={emoji} 
+                                                                        size="xs" 
+                                                                        variant={userReacted ? "filled" : "light"} 
+                                                                        color="gray"
+                                                                        style={{ cursor: 'pointer', textTransform: 'none', paddingLeft: 6, paddingRight: 6 }}
+                                                                        onClick={() => handleReaction(msg._id, emoji)}
+                                                                    >
+                                                                        <Group gap={4} align="center">
+                                                                            {Icon ? <Icon size={12} /> : emoji}
+                                                                            <span>{count}</span>
+                                                                        </Group>
+                                                                    </Badge>
+                                                                );
+                                                            })}
+                                                        </Group>
+                                                    )}
+
+                                                    <Group gap={4} mt={2} style={{ opacity: 0.5 }}>
+                                                        <ActionIcon 
+                                                            variant="subtle" 
+                                                            color="gray" 
+                                                            size="xs" 
+                                                            onClick={() => setReplyingTo(msg)}
+                                                        >
+                                                            <IconArrowBackUp size={12} />
+                                                        </ActionIcon>
+                                                        
+                                                        <Menu shadow="md" width={200}>
+                                                            <Menu.Target>
+                                                                <ActionIcon variant="subtle" color="gray" size="xs">
+                                                                    <IconMoodSmile size={12} />
+                                                                </ActionIcon>
+                                                            </Menu.Target>
+                                                            <Menu.Dropdown>
+                                                                <Group gap={4} p={4} justify="center">
+                                                                    {Object.entries(REACTION_ICONS).map(([emoji, Icon]) => (
+                                                                        <ActionIcon 
+                                                                            key={emoji} 
+                                                                            variant="subtle" 
+                                                                            onClick={() => handleReaction(msg._id, emoji)}
+                                                                        >
+                                                                            <Icon size={18} />
+                                                                        </ActionIcon>
+                                                                    ))}
+                                                                </Group>
+                                                            </Menu.Dropdown>
+                                                        </Menu>
+
+                                                        {isMe && (
+                                                            <ActionIcon 
+                                                                variant="subtle" 
+                                                                color="gray" 
+                                                                size="xs" 
+                                                                onClick={() => handleDeleteMessage(msg._id)}
+                                                            >
+                                                                <IconTrash size={12} />
+                                                            </ActionIcon>
+                                                        )}
+                                                    </Group>
+                                                </div>
+                                                {isMe && (
+                                                    <Avatar radius="xl" size="sm" color="blue" src={user.photoURL}>{msg.senderName?.[0]}</Avatar>
+                                                )}
+                                            </Group>
+                                        );
+                                    })}
+                                    {messages.length === 0 && (
+                                        <Center h={200}>
+                                            <Text c="dimmed">No messages yet. Start the conversation!</Text>
+                                        </Center>
+                                    )}
+                                </div>
+                            </ScrollArea>
+
+                            <Box 
+                                p="md" 
+                                pt="sm" 
+                                style={{ 
+                                    borderTop: '1px solid var(--mantine-color-default-border)', 
+                                    flexShrink: 0,
+                                    backgroundColor: 'var(--mantine-color-body)'
+                                }}
+                            >
+                                {replyingTo && (
+                                    <Paper 
+                                        p="sm" 
+                                        mb="xs" 
+                                        withBorder 
+                                        radius="md"
+                                        style={{ 
+                                            display: 'flex', 
+                                            justifyContent: 'space-between', 
+                                            alignItems: 'center',
+                                            borderLeft: '4px solid #228be6'
+                                        }}
+                                    >
+                                        <Box>
+                                            <Text size="xs" fw={700} c="auto">Replying to {replyingTo.senderName}</Text>
+                                            <Text size="sm" lineClamp={1} c="auto">{replyingTo.content}</Text>
+                                        </Box>
+                                        <ActionIcon variant="subtle" color="gray" onClick={() => setReplyingTo(null)}>
+                                            <IconX size={16} />
+                                        </ActionIcon>
+                                    </Paper>
+                                )}
+
+                                <Group gap="xs" align="center" wrap="nowrap">
+                                    <Menu shadow="md" width={200} position="top-start">
+                                        <Menu.Target>
+                                            <ActionIcon variant="subtle" color="gray" radius="xl" size="lg">
+                                                <IconSticker size={20} />
+                                            </ActionIcon>
+                                        </Menu.Target>
+                                        <Menu.Dropdown>
+                                            <Text size="xs" c="dimmed" p="xs">Send a sticker</Text>
+                                            <Group gap="xs" p="xs" style={{ maxWidth: 300 }}>
+                                                {STICKERS.map((sticker, index) => (
+                                                    <ActionIcon 
+                                                        key={index} 
+                                                        variant="subtle" 
+                                                        size="xl" 
+                                                        onClick={() => handleSendMessage(sticker)}
+                                                    >
+                                                        <img src={sticker} alt="sticker" style={{ width: 30, height: 30 }} />
+                                                    </ActionIcon>
+                                                ))}
+                                            </Group>
+                                        </Menu.Dropdown>
+                                    </Menu>
+
+                                    <TextInput
+                                        placeholder={`Message ${activeTab === 'dm' ? (dmUser?.name || 'User') : activeTab}...`}
+                                        value={newMessage}
+                                        onChange={(e) => setNewMessage(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleSendMessage();
+                                            }
+                                        }}
+                                        size="md"
+                                        radius="xl"
+                                        disabled={activeTab === 'dm' && !!dmRecipientId && blockedUsers.includes(dmRecipientId)}
+                                        style={{ flex: 1 }}
+                                    />
+
+                                    <ActionIcon 
+                                        variant="filled" 
+                                        color="blue" 
+                                        size={42} 
+                                        radius="xl" 
+                                        onClick={() => handleSendMessage()} 
+                                        disabled={(!newMessage.trim() && !loading) || (activeTab === 'dm' && !!dmRecipientId && blockedUsers.includes(dmRecipientId))}
+                                    >
+                                        <IconSend size={20} />
+                                    </ActionIcon>
+                                </Group>
+                            </Box>
+                        </Box>
+                    </Box>
                 </Paper>
             </Container>
+
+            <Modal opened={searchModalOpen} onClose={() => setSearchModalOpen(false)} title="New Message">
+                <TextInput
+                    placeholder="Search users by name..."
+                    value={userSearchQuery}
+                    onChange={(e) => handleSearchUsers(e.target.value)}
+                    mb="md"
+                    leftSection={<IconSearch size={16} />}
+                />
+                <Stack gap="xs">
+                    {searchResults.map(u => (
+                        <UnstyledButton 
+                            key={u._id} 
+                            onClick={() => startDm(u._id)}
+                            style={{ padding: '8px', borderRadius: '4px' }}
+                            className="hover:bg-gray-100 dark:hover:bg-gray-800"
+                        >
+                            <Group>
+                                <Avatar color="blue" radius="xl">{u.name[0]}</Avatar>
+                                <Box style={{ flex: 1 }}>
+                                    <Text size="sm" fw={500}>{u.name}</Text>
+                                    <Text size="xs" c="dimmed">{u.branch} • Year {u.year}</Text>
+                                </Box>
+                            </Group>
+                        </UnstyledButton>
+                    ))}
+                    {userSearchQuery.length >= 2 && searchResults.length === 0 && (
+                        <Text c="dimmed" ta="center" size="sm">No users found</Text>
+                    )}
+                </Stack>
+            </Modal>
         </>
+    );
+}
+
+export default function ChatPage() {
+    return (
+        <Suspense fallback={null}>
+            <ChatPageContent />
+        </Suspense>
     );
 }

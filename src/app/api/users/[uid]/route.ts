@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import dbConnect from '@/lib/db';
 import User from '@/models/User';
 import Project from '@/models/Project';
@@ -14,7 +15,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ uid:
     try {
         await dbConnect();
         const { uid } = await params;
-        const user = await User.findOne({ firebaseUid: uid });
+        let user;
+        if (mongoose.Types.ObjectId.isValid(uid)) {
+            user = await User.findById(uid);
+        }
+        if (!user) {
+            user = await User.findOne({ firebaseUid: uid });
+        }
 
         if (!user) {
             return NextResponse.json({ user: null }, { status: 200 });

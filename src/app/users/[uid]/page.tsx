@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
-import { Container, Title, Text, Badge, Group, Card, Loader } from '@mantine/core';
+import { Container, Title, Text, Badge, Group, Card, Loader, Button } from '@mantine/core';
+import { IconMessage } from '@tabler/icons-react';
 import { getAuthHeaders } from '@/lib/api';
 
 interface UserDetail {
+  _id: string;
   firebaseUid: string;
   name: string;
   email: string;
@@ -25,6 +27,7 @@ interface UserDetail {
 
 export default function UserProfileView() {
   const params = useParams();
+  const router = useRouter();
   const uid = params?.uid as string | undefined;
   const [user, setUser] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,7 +59,16 @@ export default function UserProfileView() {
           <Card withBorder padding="lg" radius="md" shadow="sm">
             <Group justify="space-between" mb="sm">
               <Title order={2}>{user.name}</Title>
-              <Badge color="blue" variant="light">{user.role}</Badge>
+              <Group>
+                <Button 
+                  leftSection={<IconMessage size={18} />} 
+                  onClick={() => router.push(`/chat?dm=${user._id}`)}
+                  variant="light"
+                >
+                  Message
+                </Button>
+                <Badge color="blue" variant="light">{user.role}</Badge>
+              </Group>
             </Group>
             <Text size="sm" c="dimmed" mb="md">{user.email}</Text>
             <Text mb="sm">{user.branch ? `${user.branch}${user.year ? ' • Year ' + user.year : ''}` : 'Branch not set'}</Text>
