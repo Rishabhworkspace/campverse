@@ -158,6 +158,9 @@ function ChatPageContent() {
         setSupportsNotifications(hasSupport);
         if (hasSupport) {
             setNotificationPermission(Notification.permission);
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().then(perm => setNotificationPermission(perm));
+            }
         }
 
         const handleFocus = () => setWindowInFocus(true);
@@ -381,6 +384,18 @@ function ChatPageContent() {
 
                 const prev = messagesRef.current;
                 const shouldScroll = incomingMessages.length > prev.length && autoScrollRef.current;
+
+                if (prev.length > 0 && incomingMessages.length > prev.length) {
+                    const newMsgs = incomingMessages.slice(prev.length);
+                    const lastMsg = newMsgs[newMsgs.length - 1];
+                    if (lastMsg.senderId !== String(profile?._id)) {
+                        const isHidden = typeof document !== 'undefined' && document.hidden;
+                        if (!windowInFocus || isHidden) {
+                            sendBrowserNotification(lastMsg.senderName, lastMsg.content);
+                        }
+                    }
+                }
+
                 setMessages(incomingMessages);
                 if (shouldScroll) {
                     requestAnimationFrame(() => scrollToBottom());
@@ -393,7 +408,7 @@ function ChatPageContent() {
                 setIsMessagesLoading(false);
             }
         }
-    }, [activeTab, profile?.branch, profile?.year, dmRecipientId, profile?._id, profile?.role, adminBranch, adminYear]);
+    }, [activeTab, profile?.branch, profile?.year, dmRecipientId, profile?._id, profile?.role, adminBranch, adminYear, sendBrowserNotification, windowInFocus]);
 
     const scrollToBottom = () => {
         if (viewport.current) {
