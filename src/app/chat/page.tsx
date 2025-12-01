@@ -125,6 +125,7 @@ function ChatPageContent() {
     const [showSidebar, setShowSidebar] = useState(true);
     const [supportsNotifications, setSupportsNotifications] = useState(true);
     const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+    const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [windowInFocus, setWindowInFocus] = useState(true);
 
     const isVITStudent = user?.email?.endsWith('@vitstudent.ac.in');
@@ -156,10 +157,22 @@ function ChatPageContent() {
         if (typeof window === 'undefined') return;
         const hasSupport = 'Notification' in window;
         setSupportsNotifications(hasSupport);
+        
+        const storedPref = localStorage.getItem('camp_notifications_enabled');
+        if (storedPref !== null) {
+            setNotificationsEnabled(storedPref === 'true');
+        }
+
         if (hasSupport) {
             setNotificationPermission(Notification.permission);
             if (Notification.permission === 'default') {
-                Notification.requestPermission().then(perm => setNotificationPermission(perm));
+                Notification.requestPermission().then(perm => {
+                    setNotificationPermission(perm);
+                    if (perm === 'granted' && storedPref === null) {
+                        setNotificationsEnabled(true);
+                        localStorage.setItem('camp_notifications_enabled', 'true');
+                    }
+                });
             }
         }
 
@@ -182,29 +195,42 @@ function ChatPageContent() {
         };
     }, []);
 
-    const requestBrowserNotifications = useCallback(async () => {
+    const toggleNotifications = useCallback(async () => {
         if (!supportsNotifications || typeof Notification === 'undefined') {
             showError({ message: 'Browser does not support notifications.' }, 'Notifications');
             return;
         }
-        try {
-            const permission = await Notification.requestPermission();
-            setNotificationPermission(permission);
-            if (permission === 'granted') {
-                showSuccess('Browser notifications enabled for DMs');
-            } else {
-                showError({ message: 'Notification permission denied.' }, 'Notifications');
+
+        if (notificationPermission !== 'granted') {
+            try {
+                const permission = await Notification.requestPermission();
+                setNotificationPermission(permission);
+                if (permission === 'granted') {
+                    setNotificationsEnabled(true);
+                    localStorage.setItem('camp_notifications_enabled', 'true');
+                    showSuccess('Notifications enabled');
+                } else {
+                    setNotificationsEnabled(false);
+                    localStorage.setItem('camp_notifications_enabled', 'false');
+                    showError({ message: 'Notification permission denied.' }, 'Notifications');
+                }
+            } catch (error) {
+                showError(error, 'Notifications');
             }
-        } catch (error) {
-            showError(error, 'Notifications');
+        } else {
+            const newState = !notificationsEnabled;
+            setNotificationsEnabled(newState);
+            localStorage.setItem('camp_notifications_enabled', String(newState));
+            showInfo(newState ? 'Notifications enabled' : 'Notifications disabled');
         }
-    }, [supportsNotifications]);
+    }, [supportsNotifications, notificationPermission, notificationsEnabled]);
 
     const sendBrowserNotification = useCallback((senderName: string, preview?: string) => {
         if (!supportsNotifications || typeof Notification === 'undefined') return;
         if (Notification.permission !== 'granted') return;
+        if (!notificationsEnabled) return;
 
-        const body = preview?.trim()?.slice(0, 120) || 'New message in your DMs';
+        const body = preview?.trim()?.slice(0, 120) || 'New message';
         try {
             new Notification(`${senderName} sent a message`, {
                 body,
@@ -214,7 +240,7 @@ function ChatPageContent() {
         } catch (error) {
             console.warn('Failed to show browser notification', error);
         }
-    }, [supportsNotifications]);
+    }, [supportsNotifications, notificationsEnabled]);
 
     const handleSearchUsers = async (query: string) => {
         setUserSearchQuery(query);
@@ -691,20 +717,14 @@ function ChatPageContent() {
                                     </Group>
                                     <Group gap={4}>
                                         {supportsNotifications && (
-                                            <Tooltip label={notificationPermission === 'granted' ? 'Browser notifications enabled' : 'Enable browser notifications for DMs'}>
+                                            <Tooltip label={notificationsEnabled && notificationPermission === 'granted' ? 'Disable notifications' : 'Enable notifications'}>
                                                 <ActionIcon
                                                     variant="subtle"
-                                                    color={notificationPermission === 'granted' ? 'yellow' : 'gray'}
+                                                    color={notificationsEnabled && notificationPermission === 'granted' ? 'yellow' : 'gray'}
                                                     size="xs"
-                                                    onClick={() => {
-                                                        if (notificationPermission === 'granted') {
-                                                            showInfo('Notifications already enabled');
-                                                        } else {
-                                                            requestBrowserNotifications();
-                                                        }
-                                                    }}
+                                                    onClick={toggleNotifications}
                                                 >
-                                                    {notificationPermission === 'granted' ? (
+                                                    {notificationsEnabled && notificationPermission === 'granted' ? (
                                                         <IconBellRinging size={14} />
                                                     ) : (
                                                         <IconBell size={14} />
