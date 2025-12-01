@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import Message from '@/models/Message';
+import User from '@/models/User';
 
 export async function DELETE(
     req: NextRequest,
@@ -27,7 +28,10 @@ export async function DELETE(
             return NextResponse.json({ error: 'Message not found' }, { status: 404 });
         }
 
-        if (message.senderId.toString() !== userId) {
+        const user = await User.findById(userId);
+        const isAdmin = user?.role === 'admin';
+
+        if (message.senderId.toString() !== userId && !isAdmin) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

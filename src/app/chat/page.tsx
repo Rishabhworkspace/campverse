@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
-import { Container, Title, Paper, ScrollArea, TextInput, ActionIcon, Group, Text, Avatar, Center, Tooltip, Badge, Menu, Button, Box, Stack, Modal, UnstyledButton, LoadingOverlay, Skeleton, useComputedColorScheme } from '@mantine/core';
+import { Container, Title, Paper, ScrollArea, TextInput, ActionIcon, Group, Text, Avatar, Center, Tooltip, Badge, Menu, Button, Box, Stack, Modal, UnstyledButton, LoadingOverlay, Skeleton, useComputedColorScheme, Select } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useAuth } from '@/components/AuthProvider';
 import { IconSend, IconTrash, IconRefresh, IconMoodSmile, IconArrowBackUp, IconX, IconSticker, IconThumbUp, IconHeart, IconMoodHappy, IconMoodSurprised, IconMoodSad, IconFlame, IconSearch, IconArrowDown, IconHash, IconBuilding, IconCalendar, IconMessage, IconUserPlus, IconBan, IconDotsVertical, IconArrowLeft, IconEye, IconPinned, IconPinnedOff, IconStarFilled, IconBell, IconBellRinging } from '@tabler/icons-react';
@@ -101,6 +101,16 @@ function ChatPageContent() {
     const pinnedCount = useMemo(() => recentDms.filter(dm => dm.isPinned).length, [recentDms]);
     const computedColorScheme = useComputedColorScheme('light');
     const isDark = computedColorScheme === 'dark';
+
+    const [adminBranch, setAdminBranch] = useState<string>('');
+    const [adminYear, setAdminYear] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (profile?.role === 'admin') {
+            setAdminBranch(profile.branch || '');
+            setAdminYear(profile.year ? String(profile.year) : null);
+        }
+    }, [profile?.role, profile?.branch, profile?.year]);
     
     // New State
     const [searchModalOpen, setSearchModalOpen] = useState(false);
@@ -333,8 +343,8 @@ function ChatPageContent() {
         if (!activeTab) return;
 
         const type = activeTab;
-        const branch = profile?.branch;
-        const year = profile?.year;
+        const branch = profile?.role === 'admin' ? adminBranch : profile?.branch;
+        const year = profile?.role === 'admin' ? adminYear : profile?.year;
 
         if (type === 'branch' && !branch) return;
         if (type === 'year' && !year) return;
@@ -347,8 +357,12 @@ function ChatPageContent() {
 
         try {
             const query = new URLSearchParams({ type });
-            if (type === 'branch' && branch) query.append('branch', branch);
-            if (type === 'year' && year) query.append('year', String(year));
+            if (type === 'branch') {
+                if (branch) query.append('branch', branch);
+            }
+            if (type === 'year') {
+                 if (year) query.append('year', String(year));
+            }
             if (type === 'dm' && dmRecipientId) query.append('recipientId', dmRecipientId);
             if (profile?._id) query.append('userId', String(profile._id));
 
@@ -379,7 +393,7 @@ function ChatPageContent() {
                 setIsMessagesLoading(false);
             }
         }
-    }, [activeTab, profile?.branch, profile?.year, dmRecipientId, profile?._id]);
+    }, [activeTab, profile?.branch, profile?.year, dmRecipientId, profile?._id, profile?.role, adminBranch, adminYear]);
 
     const scrollToBottom = () => {
         if (viewport.current) {
@@ -459,8 +473,8 @@ function ChatPageContent() {
         if ((!newMessage.trim() && !stickerUrl) || !user || !profile) return;
 
         const type = activeTab;
-        const branch = profile.branch;
-        const year = profile.year;
+        const branch = profile.role === 'admin' ? adminBranch : profile.branch;
+        const year = profile.role === 'admin' ? adminYear : profile.year;
 
         try {
             const res = await fetch('/api/chat', {
@@ -582,6 +596,24 @@ function ChatPageContent() {
                             }}
                         >
                             <Stack p="md" gap="xs" style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+                                {profile?.role === 'admin' && (
+                                    <Stack gap="xs" mb="md" p="xs" bg={isDark ? 'var(--mantine-color-dark-6)' : 'var(--mantine-color-gray-0)'} style={{ borderRadius: 8 }}>
+                                        <Text size="xs" fw={700} c="dimmed">Admin Controls</Text>
+                                        <TextInput 
+                                            placeholder="Override Branch" 
+                                            value={adminBranch} 
+                                            onChange={(e) => setAdminBranch(e.currentTarget.value)} 
+                                            size="xs"
+                                        />
+                                        <Select
+                                            placeholder="Override Year"
+                                            data={['1', '2', '3', '4']}
+                                            value={adminYear}
+                                            onChange={setAdminYear}
+                                            size="xs"
+                                        />
+                                    </Stack>
+                                )}
                                 <Group justify="space-between" mb="xs">
                                     <Text fw={700} c="dimmed" size="xs" tt="uppercase">Channels</Text>
                                     <Tooltip label="Refresh Messages">
@@ -611,12 +643,12 @@ function ChatPageContent() {
                                         setActiveTab('branch');
                                         if (isMobile) setShowSidebar(false);
                                     }}
-                                    disabled={!profile?.branch}
+                                    disabled={!profile?.branch && profile?.role !== 'admin'}
                                     justify="flex-start"
                                     leftSection={<IconBuilding size={16} />}
                                     fullWidth
                                 >
-                                    {profile?.branch ? `${profile.branch}` : 'Branch'}
+                                    {profile?.role === 'admin' ? (adminBranch || 'Branch (Admin)') : (profile?.branch || 'Branch')}
                                 </Button>
                                 <Button 
                                     variant={activeTab === 'year' ? 'filled' : 'subtle'} 
@@ -625,12 +657,12 @@ function ChatPageContent() {
                                         setActiveTab('year');
                                         if (isMobile) setShowSidebar(false);
                                     }}
-                                    disabled={!profile?.year}
+                                    disabled={!profile?.year && profile?.role !== 'admin'}
                                     justify="flex-start"
                                     leftSection={<IconCalendar size={16} />}
                                     fullWidth
                                 >
-                                    {profile?.year ? `Year ${profile.year}` : 'Year'}
+                                    {profile?.role === 'admin' ? (adminYear ? `Year ${adminYear} (Admin)` : 'Year (Admin)') : (profile?.year ? `Year ${profile.year}` : 'Year')}
                                 </Button>
 
                                 <Group justify="space-between" mt="md" mb="xs">
@@ -989,7 +1021,7 @@ function ChatPageContent() {
                                                             </Menu.Dropdown>
                                                         </Menu>
 
-                                                        {isMe && (
+                                                        {(isMe || profile?.role === 'admin') && (
                                                             <ActionIcon 
                                                                 variant="subtle" 
                                                                 color="gray" 

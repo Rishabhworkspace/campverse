@@ -215,19 +215,21 @@ export async function POST(req: NextRequest) {
         }
 
         // Verify branch/year match
-        if (type === 'branch') {
-            if (!branch) return NextResponse.json({ error: 'Branch is required' }, { status: 400 });
-            // Allow if sender.branch is missing (legacy users) or matches
-            if (sender.branch && sender.branch !== branch) {
-                return NextResponse.json({ error: 'Wrong branch' }, { status: 403 });
+        if (sender.role !== 'admin') {
+            if (type === 'branch') {
+                if (!branch) return NextResponse.json({ error: 'Branch is required' }, { status: 400 });
+                // Allow if sender.branch is missing (legacy users) or matches
+                if (sender.branch && sender.branch !== branch) {
+                    return NextResponse.json({ error: 'Wrong branch' }, { status: 403 });
+                }
             }
-        }
-        if (type === 'year') {
-            if (!year) return NextResponse.json({ error: 'Year is required' }, { status: 400 });
-            
-            // Allow if sender.year is missing (legacy users) or matches
-            if (sender.year && Number(sender.year) !== Number(year)) {
-                return NextResponse.json({ error: `Wrong year. You are in Year ${sender.year}, but trying to post to Year ${year}` }, { status: 403 });
+            if (type === 'year') {
+                if (!year) return NextResponse.json({ error: 'Year is required' }, { status: 400 });
+                
+                // Allow if sender.year is missing (legacy users) or matches
+                if (sender.year && Number(sender.year) !== Number(year)) {
+                    return NextResponse.json({ error: `Wrong year. You are in Year ${sender.year}, but trying to post to Year ${year}` }, { status: 403 });
+                }
             }
         } else if (type === 'dm') {
             if (!recipientId) return NextResponse.json({ error: 'Recipient ID is required for DM' }, { status: 400 });
