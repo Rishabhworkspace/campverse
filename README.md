@@ -18,7 +18,6 @@ Campus Connect is a comprehensive Next.js-based platform designed to foster coll
 - **Discussions**: Engage in threaded discussions on various topics.
 - **Events**: Organize and participate in campus events.
 - **Quizzes**: Take and create quizzes for educational purposes.
-<!-- - **Resources**: Share and access educational resources. -->
 - **Skills**: List and discover skills offered by users.
 
 ### Administrative Features
@@ -113,25 +112,6 @@ Before running the application, ensure you have the following installed:
    npm run lint
    ```
 
-## API Endpoints
-
-The application includes various API routes for backend functionality:
-
-- `/api/chat`: Chat-related operations
-- `/api/users`: User management
-- `/api/projects`: Project collaboration
-- `/api/discussions`: Discussion threads
-- `/api/events`: Event management
-- `/api/quizzes`: Quiz functionality
-<!-- - `/api/resources`: Resource sharing -->
-- `/api/skills`: Skill listings
-- `/api/reports`: Reporting system
-- `/api/moderation`: Content moderation
-- `/api/stats`: Platform statistics
-- `/api/health`: Health checks
-- `/api/seed`: Database seeding
-
-For detailed API documentation, refer to the individual route files in `src/app/api/`.
 
 ## Browser Notifications
 
@@ -168,7 +148,6 @@ camp/
 │   │   ├── profile/        # Profile page
 │   │   ├── projects/       # Projects page
 │   │   ├── quizzes/        # Quizzes page
-<!-- │   │   ├── resources/      # Resources page -->
 │   │   ├── signup/         # Signup page
 │   │   ├── skills/         # Skills page
 │   │   └── users/          # Users directory
